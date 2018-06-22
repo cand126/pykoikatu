@@ -103,8 +103,11 @@ def xml_parser(url, n_args):
             if rating > args_rating:
                 continue
 
+            match = re.compile('thumbnail_(.*).png').findall(img['src'])
+            if not match:
+                continue
             # Not really MD5
-            md5 = re.compile('thumbnail_(.*).png').findall(img['src'])[0]
+            md5 = match[0]
             if md5 in md5_dict:
                 continue
 

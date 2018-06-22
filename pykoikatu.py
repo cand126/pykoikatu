@@ -198,8 +198,8 @@ def dump_token(token):
                 debug_print('?', token[1])
                 data = bytes([token[1]])
             elif token[0] == 'LIST_ALTER':
-                data = (bytes([SIGN_LIST_ALTER, len(token[1])]) +
-                        b''.join([dump_token(x) for x in token[1]]))
+                data = (bytes([SIGN_LIST_ALTER, len(token[1])]) + b''.join(
+                    [dump_token(x) for x in token[1]]))
             elif token[0] == 'FIXED_SIZE_LIST':
                 data_list = []
                 for x in token[1]:
@@ -208,8 +208,8 @@ def dump_token(token):
                     else:
                         data_list.append(dump_token_with_len(x))
                 data = b''.join(data_list)
-                data = (bytes([SIGN_FIXED_SIZE_LIST]) +
-                        struct.pack('>H', len(data)) + data)
+                data = (bytes([SIGN_FIXED_SIZE_LIST]) + struct.pack(
+                    '>H', len(data)) + data)
             else:
                 raise Exception('Unknown token <{}>: {}'.format(
                     type(token), token))
@@ -219,8 +219,8 @@ def dump_token(token):
 
     elif type(token) == list:
         if len(token) < 16:
-            data = (bytes([SIGN_LIST + len(token)]) +
-                    b''.join([dump_token(x) for x in token]))
+            data = (bytes([SIGN_LIST + len(token)]) + b''.join(
+                [dump_token(x) for x in token]))
         else:
             data = (bytes([SIGN_LONG_LIST]) + struct.pack('>H', len(token)) +
                     b''.join([dump_token(x) for x in token]))
@@ -303,6 +303,8 @@ def read_card(filename):
     lstinfo_token, delta_idx = parse_token(card_data, idx)
     idx += delta_idx
 
+    has_kkex = (lstinfo_token['lstInfo'][0]['name'] == 'KKEx')
+
     idx += 8  # Size of lists
     idx += 4  # Size of face
     face_token, delta_idx = parse_token(card_data, idx)
@@ -319,6 +321,10 @@ def read_card(filename):
     parameter_token, delta_idx = parse_token(card_data, idx)
     idx += delta_idx
     status_token, delta_idx = parse_token(card_data, idx)
+    idx += delta_idx
+
+    if has_kkex:
+        kkex_data = card_data[idx:]
 
     card = {
         'img1': img1,
@@ -332,10 +338,16 @@ def read_card(filename):
         'parameter': parameter_token,
         'status': status_token,
     }
+
+    if has_kkex:
+        card['KKEx'] = kkex_data
+
     return card
 
 
 def write_card(filename, card):
+    has_kkex = ('KKEx' in card)
+
     face_data = dump_token_with_len(card['face'])
     body_data = dump_token_with_len(card['body'])
     hair_data = dump_token_with_len(card['hair'])
@@ -343,21 +355,45 @@ def write_card(filename, card):
     parameter_data = dump_token(card['parameter'])
     status_data = dump_token(card['status'])
 
+    if has_kkex:
+        # KKEx is not modified
+        lst_idx = {
+            'KKEx': 0,
+            'Custom': 1,
+            'Coordinate': 2,
+            'Parameter': 3,
+            'Status': 4,
+        }
+    else:
+        lst_idx = {
+            'Custom': 0,
+            'Coordinate': 1,
+            'Parameter': 2,
+            'Status': 3,
+        }
+
     idx = 0
-    card['lstInfo']['lstInfo'][0]['pos'] = idx
-    card['lstInfo']['lstInfo'][0]['size'] = (
+    token = card['lstInfo']['lstInfo']
+    token[lst_idx['Custom']]['pos'] = idx
+    token[lst_idx['Custom']]['size'] = (
         len(face_data) + len(body_data) + len(hair_data))
     idx += len(face_data) + len(body_data) + len(hair_data)
-    card['lstInfo']['lstInfo'][1]['pos'] = idx
-    card['lstInfo']['lstInfo'][1]['size'] = len(coordinate_data)
+    token[lst_idx['Coordinate']]['pos'] = idx
+    token[lst_idx['Coordinate']]['size'] = len(coordinate_data)
     idx += len(coordinate_data)
-    card['lstInfo']['lstInfo'][2]['pos'] = idx
-    card['lstInfo']['lstInfo'][2]['size'] = len(parameter_data)
+    token[lst_idx['Parameter']]['pos'] = idx
+    token[lst_idx['Parameter']]['size'] = len(parameter_data)
     idx += len(parameter_data)
-    card['lstInfo']['lstInfo'][3]['pos'] = idx
-    card['lstInfo']['lstInfo'][3]['size'] = len(status_data)
+    token[lst_idx['Status']]['pos'] = idx
+    token[lst_idx['Status']]['size'] = len(status_data)
     idx += len(status_data)
     lstinfo_data = dump_token(card['lstInfo'])
+
+    data_len = (len(face_data) + len(body_data) + len(hair_data) +
+                len(coordinate_data) + len(parameter_data) + len(status_data))
+
+    if has_kkex:
+        data_len += len(card['KKEx'])
 
     with open(filename, 'wb') as g:
         g.write(card['img1'])
@@ -376,11 +412,7 @@ def write_card(filename, card):
 
         g.write(lstinfo_data)
 
-        g.write(
-            struct.pack(
-                '<Q',
-                len(face_data) + len(body_data) + len(hair_data) +
-                len(coordinate_data) + len(parameter_data) + len(status_data)))
+        g.write(struct.pack('<Q', data_len))
         g.write(face_data)
         g.write(body_data)
         g.write(hair_data)
@@ -388,6 +420,9 @@ def write_card(filename, card):
         g.write(coordinate_data)
         g.write(parameter_data)
         g.write(status_data)
+
+        if has_kkex:
+            g.write(card['KKEx'])
 
 
 def generate_img_text(width, height, bg_color, text, text_color):
@@ -451,9 +486,9 @@ def parse_face_body_params(card):
     return np.array(
         card['face']['shapeValueFace'] + card['body']['shapeValueBody'] + [
             card['body']['bustSoftness'], card['body']['bustWeight']
-        ] + card['body']['skinMainColor'] + card['body']['skinSubColor'] +
-        [card['body']['skinGlossPower']] + card['body']['nipColor'] +
-        [card['body']['nipGlossPower']],
+        ] + card['body']['skinMainColor'] + card['body']['skinSubColor'] + [
+            card['body']['skinGlossPower']
+        ] + card['body']['nipColor'] + [card['body']['nipGlossPower']],
         dtype=float)
 
 
