@@ -10,14 +10,14 @@
 # Better model of parameter space
 
 import codecs
+import io
+import struct
+from collections import OrderedDict
+
 import h5py
 import hsluv
-import io
 import numpy as np
-import struct
 from PIL import Image, ImageDraw, ImageFont
-from collections import OrderedDict
-from pprint import pprint
 
 DEBUG = False
 
@@ -232,7 +232,7 @@ def dump_token(token):
         else:
             data = (bytes([SIGN_LONG_PAIRS]) + struct.pack(
                 '>H', len(token)) + b''.join(
-                    [dump_token(k) + dump_token(v) for k, v in token.items()]))
+                [dump_token(k) + dump_token(v) for k, v in token.items()]))
 
     elif type(token) == str:
         data = token.encode()
@@ -244,9 +244,9 @@ def dump_token(token):
     elif type(token) == int:
         if token <= SIGN_UINT1_MAX:
             data = bytes([token])
-        elif token < 2**8:
+        elif token < 2 ** 8:
             data = bytes([SIGN_UINT1_ALTER]) + bytes([token])
-        elif token < 2**16:
+        elif token < 2 ** 16:
             data = bytes([SIGN_UINT2]) + struct.pack('>H', token)
         else:
             data = bytes([SIGN_UINT4]) + struct.pack('>I', token)
@@ -376,7 +376,7 @@ def write_card(filename, card):
     token = card['lstInfo']['lstInfo']
     token[lst_idx['Custom']]['pos'] = idx
     token[lst_idx['Custom']]['size'] = (
-        len(face_data) + len(body_data) + len(hair_data))
+            len(face_data) + len(body_data) + len(hair_data))
     idx += len(face_data) + len(body_data) + len(hair_data)
     token[lst_idx['Coordinate']]['pos'] = idx
     token[lst_idx['Coordinate']]['size'] = len(coordinate_data)

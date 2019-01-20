@@ -1,4 +1,3 @@
-import argparse
 import hashlib
 import json
 import os
@@ -6,11 +5,11 @@ import pickle
 import queue
 import re
 import shutil
-import sys
 import threading
 import time
 import urllib.parse
 import urllib.request
+
 from bs4 import BeautifulSoup
 
 

@@ -1,6 +1,7 @@
 # Get mean and covariance of face and body parameters from dataset
 
 import os
+
 from pykoikatu import *
 
 in_dir = 'test_booru'

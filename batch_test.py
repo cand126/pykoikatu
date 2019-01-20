@@ -1,4 +1,5 @@
 import os
+
 from pykoikatu import *
 
 in_dir = 'tmp'
